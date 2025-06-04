@@ -59,10 +59,18 @@ const AddBetForm = ({
             </div>
             <div>
               <label htmlFor="championship" className="block text-sm font-medium text-green-200 mb-1 flex items-center"><Shield size={14} className="mr-1.5"/>Campeonato:</label>
-              <select id="championship" value={formData.championship} onChange={(e) => handleInputChange('championship', e.target.value)} className="w-full p-2 rounded bg-green-700 border border-green-600 focus:ring-yellow-400 focus:border-yellow-400">
-                <option value="">Selecione o Campeonato</option>
-                {championships.map(champ => <option key={champ} value={champ}>{champ}</option>)}
-              </select>
+              <input 
+                type="text" 
+                id="championship" 
+                list="championship-list"
+                value={formData.championship} 
+                onChange={(e) => handleInputChange('championship', e.target.value)} 
+                className="w-full p-2 rounded bg-green-700 border border-green-600 focus:ring-yellow-400 focus:border-yellow-400" 
+                placeholder="Digite ou selecione o campeonato"
+              />
+              <datalist id="championship-list">
+                {championships.map(champ => <option key={champ} value={champ} />)}
+              </datalist>
             </div>
             <div>
               <label htmlFor="homeTeam" className="block text-sm font-medium text-green-200 mb-1 flex items-center"><Users size={14} className="mr-1.5"/>Time da Casa:</label>

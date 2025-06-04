@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Upload } from 'lucide-react';
 import BettingTable from './BettingTable';
 import ImportModal from './ImportModal';
@@ -8,9 +8,34 @@ const Dashboard = ({
   bets,
   onFileUpload,
   onEditBet,
-  onDeleteBet
+  onDeleteBet,
+  isImporting,
+  importFeedback,
+  clearImportFeedback,
+  onDeleteBetsByDate
 }) => {
   const [showImportModal, setShowImportModal] = useState(false);
+
+  const handleCloseImportModal = useCallback(() => {
+    setShowImportModal(false);
+    if (importFeedback && importFeedback.message) {
+      clearImportFeedback();
+    }
+  }, [importFeedback, clearImportFeedback]);
+
+  useEffect(() => {
+    if (
+      (importFeedback.type === 'success' || importFeedback.type === 'info') &&
+      importFeedback.message && 
+      showImportModal
+    ) {
+      const timer = setTimeout(() => {
+        handleCloseImportModal();
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [importFeedback, showImportModal, handleCloseImportModal]);
 
   return (
     <div className="flex flex-col h-full">
@@ -50,8 +75,12 @@ const Dashboard = ({
       {showImportModal && (
         <ImportModal 
           show={showImportModal} 
-          onClose={() => setShowImportModal(false)} 
+          onClose={handleCloseImportModal} 
           onConfirmImport={onFileUpload}
+          isImporting={isImporting}
+          feedback={importFeedback}
+          clearFeedback={clearImportFeedback}
+          onDeleteBetsByDate={onDeleteBetsByDate}
         />
       )}
     </div>
