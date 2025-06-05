@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { formatCurrency, formatOdd, getStatusClassAndText, formatDateDisplay } from '../utils/formatters'; // formatDateDisplay adicionado
 import { MoreHorizontal, Edit3, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'; // Ícones para paginação
 
-const BETS_PER_PAGE = 50;
+const BETS_PER_PAGE = 30;
 
-const BettingTable = ({ bets, onEdit, onDelete }) => {
+const BettingTable = ({ bets, onEditBet, onDeleteBet }) => {
   const [activeDropdown, setActiveDropdown] = useState(null); // ID da aposta cujo dropdown está ativo
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -13,26 +12,69 @@ const BettingTable = ({ bets, onEdit, onDelete }) => {
   };
 
   const handleEdit = (bet) => {
-    onEdit(bet); // onEdit deve receber o objeto da aposta completo
+    onEditBet(bet); // onEdit deve receber o objeto da aposta completo
     setActiveDropdown(null);
   };
 
   const handleDelete = (betId) => {
     if (window.confirm('Tem certeza que deseja excluir esta aposta?')) {
-      onDelete(betId);
+      onDeleteBet(betId);
     }
     setActiveDropdown(null);
   };
 
   if (!bets || bets.length === 0) {
-    return <p className="text-center text-green-300 py-4">Nenhuma aposta registrada ainda.</p>;
+    return <p className="text-center text-gray-400 py-10">Nenhuma aposta registrada ainda.</p>;
   }
+
+  const formatMarketMinutes = (marketMinutes) => {
+    if (!marketMinutes || String(marketMinutes).trim() === 'Não especificado') return 'N/A';
+    return String(marketMinutes).replace(/\s+/g, ''); 
+  };
+
+  const getStatusColor = (status, result, profit) => {
+    const s = status ? String(status).toLowerCase() : '';
+    const r = result ? String(result).toLowerCase() : '';
+
+    if (s === 'won' || r === 'green' || r === 'ganha') return 'text-green-400';
+    if (s === 'lost' || r === 'red' || r === 'perdida') return 'text-red-400';
+    if (s === 'void' || r === 'devolvida') return 'text-yellow-400';
+    
+    if (s === 'cashed_out' || r === 'cashout') {
+      if (typeof profit === 'number') {
+        if (profit > 0) return 'text-green-400'; // Cashout com lucro -> Verde
+        if (profit < 0) return 'text-red-400';   // Cashout com prejuízo -> Vermelho
+      }
+      return 'text-blue-400'; // Cashout sem lucro/prejuízo ou profit não numérico -> Azul
+    }
+    return 'text-gray-300'; // Cor padrão para status pendente ou não mapeado
+  };
+
+  const formatStatusDisplay = (status, result, profit) => {
+    const s = status ? String(status).toLowerCase() : '';
+    const r = result ? String(result).toLowerCase() : '';
+
+    if (s === 'won' || r === 'green' || r === 'ganha') return 'Green';
+    if (s === 'lost' || r === 'red' || r === 'perdida') return 'Perdida';
+    if (s === 'void' || r === 'devolvida') return 'Devolvida';
+    
+    if (s === 'cashed_out' || r === 'cashout') {
+      if (typeof profit === 'number') {
+        if (profit > 0) return 'Green';
+        if (profit < 0) return 'Perdida';
+      }
+      return 'Cashout'; // Se profit não for número ou for 0, exibe Cashout
+    }
+
+    if (s === 'pending' || r === 'pendente') return 'Pendente';
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Pendente'; 
+  };
 
   // Ordenar as apostas por data, times e mercado
   const sortedBets = [...bets].sort((a, b) => {
     // Primeiro, comparar as datas (ordem decrescente)
-    const dateA = new Date(a.date.split('/').reverse().join('-'));
-    const dateB = new Date(b.date.split('/').reverse().join('-'));
+    const dateA = new Date(a.date.split('/').reverse().join('-') + 'T00:00:00');
+    const dateB = new Date(b.date.split('/').reverse().join('-') + 'T00:00:00');
     if (dateA.getTime() !== dateB.getTime()) {
       return dateB.getTime() - dateA.getTime();
     }
@@ -73,65 +115,49 @@ const BettingTable = ({ bets, onEdit, onDelete }) => {
   };
 
   return (
-    <div className="w-full">
-      <table className="min-w-full">
-        <thead>
-          <tr className="bg-green-600">
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Data</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Campeonato</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Casa</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Fora</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Entrada (R$)</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Mercado</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Odd</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Status</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-green-200 uppercase">Lucro (R$)</th>
-            <th className="px-4 py-2 text-center text-xs font-medium text-green-200 uppercase">Ações</th>
+    <div className="overflow-x-auto w-full">
+      <table className="min-w-full w-full table-auto bg-gray-800 rounded-b-lg">
+        <thead className="bg-gray-700">
+          <tr>
+            {['DATA', 'CAMPEONATO', 'CASA', 'FORA', 'ENTRADA', 'MERCADO', 'ODD', 'STATUS', 'LUCRO', 'AÇÕES'].map(header => (
+              <th key={header} className="px-3 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-yellow-400 uppercase tracking-wider whitespace-nowrap">
+                {header}
+              </th>
+            ))}
           </tr>
         </thead>
-        <tbody className="bg-green-700">
-          {currentBetsToDisplay.map((bet) => {
-            const { statusText, className: statusClassName } = getStatusClassAndText(bet);
-            return (
-              <tr key={bet.id} className="border-b border-green-600 hover:bg-green-650">
-                <td className="px-4 py-2 text-sm text-gray-200">{formatDateDisplay(bet.date)}</td>
-                <td className="px-4 py-2 text-sm text-gray-200">{bet.championship || 'N/A'}</td>
-                <td className="px-4 py-2 text-sm text-gray-200">{bet.homeTeam || 'N/A'}</td>
-                <td className="px-4 py-2 text-sm text-gray-200">{bet.awayTeam || 'N/A'}</td>
-                <td className="px-4 py-2 text-sm text-gray-200">{formatCurrency(bet.stake)}</td>
-                <td className="px-4 py-2 text-sm text-gray-200">{bet.marketMinutes || bet.market || 'N/A'}</td>
-                <td className="px-4 py-2 text-sm text-gray-200">{formatOdd(bet.odd)}</td>
-                <td className={`px-4 py-2 text-sm ${statusClassName}`}>{statusText}</td>
-                <td className={`px-4 py-2 text-sm ${bet.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {formatCurrency(bet.profit)}
-                </td>
-                <td className="px-4 py-2 text-sm text-center relative">
-                  <button 
-                    onClick={() => toggleDropdown(bet.id)}
-                    className="text-gray-300 hover:text-yellow-400 p-1 rounded-full hover:bg-green-600"
-                  >
-                    <MoreHorizontal size={20} />
+        <tbody className="divide-y divide-gray-700">
+          {currentBetsToDisplay.map((bet, index) => (
+            <tr key={bet.id || index} className="hover:bg-gray-750 transition-colors duration-150">
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-center">
+                {bet.date ? new Date(bet.date + 'T00:00:00').toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : 'N/A'}
+              </td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-center">{bet.championship || 'N/A'}</td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-center">{bet.homeTeam || 'N/A'}</td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-center">{bet.awayTeam || 'N/A'}</td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-right">
+                {typeof bet.stake === 'number' ? `R$ ${bet.stake.toFixed(2).replace('.', ',')}` : 'N/A'}
+              </td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-center">{formatMarketMinutes(bet.marketMinutes)}</td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-200 text-center">{typeof bet.odd === 'number' ? bet.odd.toFixed(2).replace('.', ',') : 'N/A'}</td>
+              <td className={`px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm font-semibold ${getStatusColor(bet.status, bet.result, bet.profit)} text-center`}>
+                {formatStatusDisplay(bet.status, bet.result, bet.profit)}
+              </td>
+              <td className={`px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm font-semibold ${bet.profit > 0 ? 'text-green-400' : bet.profit < 0 ? 'text-red-400' : 'text-yellow-400'} text-right`}>
+                {typeof bet.profit === 'number' ? `R$ ${bet.profit.toFixed(2).replace('.', ',')}` : 'N/A'}
+              </td>
+              <td className="px-3 sm:px-4 py-2 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-400 text-center">
+                <div className="flex items-center justify-center space-x-2">
+                  <button onClick={() => handleEdit(bet)} className="hover:text-yellow-400 transition-colors duration-150" title="Editar Aposta">
+                    <Edit3 size={16} />
                   </button>
-                  {activeDropdown === bet.id && (
-                    <div className="absolute right-0 mt-2 w-40 bg-green-600 border border-green-500 rounded-md shadow-lg z-10">
-                      <button
-                        onClick={() => handleEdit(bet)}
-                        className="flex items-center w-full px-4 py-2 text-sm text-left text-green-200 hover:bg-green-500 hover:text-yellow-300"
-                      >
-                        <Edit3 size={16} className="mr-2" /> Editar
-                      </button>
-                      <button
-                        onClick={() => handleDelete(bet.id)}
-                        className="flex items-center w-full px-4 py-2 text-sm text-left text-red-400 hover:bg-red-500 hover:text-white"
-                      >
-                        <Trash2 size={16} className="mr-2" /> Excluir
-                      </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
+                  <button onClick={() => handleDelete(bet.id)} className="hover:text-red-400 transition-colors duration-150" title="Excluir Aposta">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
 

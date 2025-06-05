@@ -1,15 +1,25 @@
 import React from 'react';
 
-const StatsCard = ({ title, value, icon, color = 'text-yellow-400', textSize = 'text-sm', valueSize = 'text-xl' }) => {
+const StatsCard = ({ title, value, icon, bgColor = 'bg-gray-700', titleColor = 'text-gray-300', valueColor = 'text-white', iconColor = 'text-red-500', textSize = 'text-xs', valueSize = 'text-lg', tooltipText, iconPosition = 'top-center' }) => {
   return (
-    <div className="bg-green-400 p-3 rounded-lg shadow-md flex items-center space-x-3">
-      <div className={`p-2 rounded-full bg-green-300 ${color}`}>
-        {icon} 
-      </div>
-      <div>
-        <p className={`font-medium text-green-700 ${textSize}`}>{title}</p>
-        <p className={`font-bold text-green-800 ${valueSize}`}>{value}</p>
-      </div>
+    <div className={`${bgColor} px-3 py-2 rounded-lg shadow-md flex flex-col items-center text-center relative`}>
+      {icon && (
+        <div className={`
+          ${iconPosition === 'top-center' ? 'flex items-center justify-center w-7 h-7 rounded-full bg-opacity-25 mb-1' : ''}
+          ${iconPosition === 'top-right' ? 'absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-opacity-25' : ''}
+          ${iconColor}
+        `}>
+          {tooltipText ? (
+            <span title={tooltipText} className="flex items-center justify-center">
+              {React.cloneElement(icon, { size: 20, className: iconColor })}
+            </span>
+          ) : (
+            React.cloneElement(icon, { size: 20, className: iconColor })
+          )}
+        </div>
+      )}
+      <h4 className={`${titleColor} ${textSize} font-medium ${iconPosition === 'top-right' && icon ? 'pt-5' : ''}`}>{title}</h4>
+      <p className={`${valueColor} ${valueSize} font-bold`}>{value}</p>
     </div>
   );
 };

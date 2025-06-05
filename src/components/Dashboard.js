@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { Upload, Plus } from 'lucide-react';
 import BettingTable from './BettingTable';
 import ImportModal from './ImportModal';
 
-const Dashboard = ({ 
-  onShowAddForm, 
+const Dashboard = ({
+  onShowAddForm,
   bets,
   onFileUpload,
   onEditBet,
@@ -16,66 +16,49 @@ const Dashboard = ({
 }) => {
   const [showImportModal, setShowImportModal] = useState(false);
 
-  const handleCloseImportModal = useCallback(() => {
+  const handleImportClick = () => {
+    setShowImportModal(true);
+  };
+
+  const handleCloseImportModal = () => {
     setShowImportModal(false);
-    if (importFeedback && importFeedback.message) {
-      clearImportFeedback();
-    }
-  }, [importFeedback, clearImportFeedback]);
-
-  useEffect(() => {
-    if (
-      (importFeedback.type === 'success' || importFeedback.type === 'info') &&
-      importFeedback.message && 
-      showImportModal
-    ) {
-      const timer = setTimeout(() => {
-        handleCloseImportModal();
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [importFeedback, showImportModal, handleCloseImportModal]);
+    clearImportFeedback();
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Card Principal */}
-      <div className="bg-green-800 rounded-lg shadow flex flex-col h-full">
-        {/* Cabeçalho com título centralizado e botões à direita */}
-        <div className="p-4 flex items-center">
-          <h3 className="text-2xl font-bold text-white flex-1 text-center">Histórico de Apostas</h3>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setShowImportModal(true)}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded text-sm transition-colors duration-150 flex items-center"
+    <div className="space-y-6">
+      <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-100 flex-grow text-center">Histórico de Apostas</h2>
+          <div className="flex items-center space-x-2 flex-shrink-0">
+            <button
+              onClick={handleImportClick}
+              className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 sm:px-4 rounded-md flex items-center justify-center text-xs sm:text-sm transition-colors shadow-md hover:shadow-lg"
             >
-              <Upload size={16} className="mr-1" />
-              Importar Apostas
+              <Upload size={16} className="mr-1 sm:mr-2" />
+              Importar Histórico
             </button>
-            <button 
+            <button
               onClick={onShowAddForm}
-              className="bg-yellow-400 hover:bg-yellow-500 text-green-900 font-semibold py-2 px-4 rounded text-sm transition-colors duration-150 flex items-center"
+              className="bg-gray-600 hover:bg-gray-500 text-gray-100 font-medium py-2 px-3 sm:px-4 rounded-md flex items-center text-xs sm:text-sm transition-colors shadow-md hover:shadow-lg"
             >
-              <Plus size={16} className="mr-1" />
+              <Plus size={16} className="mr-1 sm:mr-2" />
               Nova Aposta
             </button>
           </div>
         </div>
-        
-        {/* Área da Tabela */}
-        <div className="flex-1">
-          <BettingTable 
-            bets={bets}
-            onEdit={onEditBet}
-            onDelete={onDeleteBet}
-          />
-        </div>
+
+        <BettingTable 
+          bets={bets} 
+          onEditBet={onEditBet} 
+          onDeleteBet={onDeleteBet} 
+        />
       </div>
 
       {showImportModal && (
-        <ImportModal 
-          show={showImportModal} 
-          onClose={handleCloseImportModal} 
+        <ImportModal
+          isOpen={showImportModal}
+          onClose={handleCloseImportModal}
           onConfirmImport={onFileUpload}
           isImporting={isImporting}
           feedback={importFeedback}

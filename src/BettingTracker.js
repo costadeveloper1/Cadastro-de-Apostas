@@ -1,34 +1,26 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, TrendingUp, BarChart3, Target, Instagram, Linkedin, Mail, Twitter } from 'lucide-react';
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { Plus, TrendingUp, BarChart3, Target, Instagram, Linkedin, Mail, Twitter, TrendingDown, HelpCircle } from 'lucide-react';
+
 import AddBetForm from './components/AddBetForm';
 import Dashboard from './components/Dashboard';
-import Reports from './components/Reports';
+import ReportsPage from './components/ReportsPage'; 
 import StatsCard from './components/StatsCard';
 
 const BettingTracker = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  
+  const location = useLocation();
   const [bets, setBets] = useState(() => {
-    const savedBets = localStorage.getItem('bettingTrackerBets');
-    if (savedBets) {
-      try {
-        const parsedBets = JSON.parse(savedBets);
-        // Validar se parsedBets é um array; caso contrário, retornar array de exemplo
-        return Array.isArray(parsedBets) ? parsedBets : []; 
-      } catch (error) {
-        console.error("Erro ao parsear apostas do localStorage:", error);
-        return []; // Retornar array vazio em caso de erro no parse
-      }
-    } else {
-      // Removidos os dados de exemplo daqui para um localStorage mais limpo inicialmente
-      // Ou, se preferir, pode manter os dados de exemplo se 'savedBets' for nulo.
-      // Por ora, retornarei um array vazio se nada for encontrado.
-      return []; 
+    const savedBets = localStorage.getItem('bets');
+    try {
+      return savedBets ? JSON.parse(savedBets) : [];
+    } catch (error) {
+      console.error("Erro ao parsear apostas do localStorage:", error);
+      return [];
     }
   });
 
   useEffect(() => {
-    localStorage.setItem('bettingTrackerBets', JSON.stringify(bets));
+    localStorage.setItem('bets', JSON.stringify(bets));
   }, [bets]);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -36,7 +28,6 @@ const BettingTracker = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importFeedback, setImportFeedback] = useState({ type: '', message: '' });
   
-  // Envolver initialFormData em useMemo
   const initialFormData = useMemo(() => ({
     date: new Date().toISOString().split('T')[0],
     championship: '',
@@ -55,10 +46,9 @@ const BettingTracker = () => {
     '50-59:59', '60-69:59', '70-79:59', '80-fim'
   ], []);
 
-  // Criar lista dinâmica de campeonatos únicos
   const uniqueChampionships = useMemo(() => {
-    const allChampionships = bets.map(bet => bet.championship).filter(Boolean); // filter(Boolean) remove valores nulos ou vazios
-    return Array.from(new Set(allChampionships)).sort(); // Ordena para melhor visualização
+    const allChampionships = bets.map(bet => bet.championship).filter(Boolean);
+    return Array.from(new Set(allChampionships)).sort();
   }, [bets]);
 
   useEffect(() => {
@@ -127,7 +117,7 @@ const BettingTracker = () => {
     } else {
       const newBet = {
         ...betData,
-        id: Date.now(),
+        id: Date.now().toString(),
         timestamp: new Date().toISOString()
       };
       setBets(prev => [newBet, ...prev]);
@@ -155,10 +145,10 @@ const BettingTracker = () => {
 
   const stats = useMemo(() => {
     const totalBets = bets.length;
-    const greenBetsCount = bets.filter(bet => bet.status === 'won' || bet.result === 'green' || bet.result === 'Ganha').length;
+    const greenBetsList = bets.filter(bet => bet.status === 'won' || bet.result === 'green' || bet.result === 'Ganha');
+    const greenBetsCount = greenBetsList.length;
     const redBetsCount = bets.filter(bet => bet.status === 'lost' || bet.result === 'red' || bet.result === 'Perdida').length;
-    // Considerar apenas apostas com resultado 'won' ou 'lost' para o cálculo da taxa de acerto, 
-    // excluindo 'void', 'cashed_out', 'pending', 'Devolvida', 'Cashout'
+    
     const relevantBetsForWinRate = bets.filter(bet => 
         (bet.status === 'won' || bet.result === 'green' || bet.result === 'Ganha') || 
         (bet.status === 'lost' || bet.result === 'red' || bet.result === 'Perdida')
@@ -167,16 +157,21 @@ const BettingTracker = () => {
     const totalProfit = bets.reduce((sum, bet) => sum + (bet.profit || 0), 0);
     const winRate = relevantBetsForWinRate > 0 ? (greenBetsCount / relevantBetsForWinRate * 100) : 0;
     
-    const totalOddsSum = bets.reduce((sum, bet) => sum + (parseFloat(bet.odd) || 0), 0);
-    const averageOdd = totalBets > 0 ? (totalOddsSum / totalBets) : 0;
+    const greenBetsOddsSum = greenBetsList.reduce((sum, bet) => sum + (parseFloat(String(bet.odd).replace(',', '.')) || 0), 0);
+    const averageOdd = greenBetsCount > 0 ? (greenBetsOddsSum / greenBetsCount) : 0;
+
+    const totalInvestido = bets.reduce((sum, bet) => sum + (parseFloat(String(bet.stake).replace(',', '.')) || 0), 0);
+    const roi = totalInvestido > 0 ? (totalProfit / totalInvestido * 100) : 0;
 
     return {
       totalProfit: totalProfit,
       totalBets: totalBets,
       greenBets: greenBetsCount,
-      redBets: redBetsCount, // Pode ser usado futuramente se necessário
+      redBets: redBetsCount, 
       winRate: winRate,
-      averageOdd: averageOdd
+      averageOdd: averageOdd,
+      totalInvestido: totalInvestido,
+      roi: roi
     };
   }, [bets]);
 
@@ -190,42 +185,66 @@ const BettingTracker = () => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlString, "text/html");
         const betElements = doc.querySelectorAll('.myb-SettledBetItem');
-        // Usaremos um array para Promises se precisarmos de processamento em paralelo no futuro
         const parsedBetsPromises = []; 
 
         console.log("Total de elementos .myb-SettledBetItem encontrados:", betElements.length);
 
-        // Iterar sobre os elementos de aposta
         for (let i = 0; i < betElements.length; i++) {
             const item = betElements[i];
-            console.log(`Processando item ${i + 1}`);
+            // console.log(`Processando item ${i + 1}`); // Removido para reduzir spam no console
 
-            const marketDescriptionEl = item.querySelector('.myb-BetParticipant_MarketDescription');
-            const marketDescriptionText = marketDescriptionEl ? marketDescriptionEl.textContent.trim() : '';
-
-            if (!marketDescriptionText.toLowerCase().includes('minutos')) {
-                console.log(`Item ${i + 1} ignorado: não é de mercado de minutos. Mercado: "${marketDescriptionText}"`);
+            if (item.textContent && item.textContent.includes("Reembolso(Push)")) {
+                // console.log(`Item ${i + 1} ignorado: Contém "Reembolso(Push)".`);
                 continue; 
             }
-            console.log(`Item ${i + 1} é de mercado de minutos: "${marketDescriptionText}"`);
+            
+            const marketDescriptionEl = item.querySelector('.myb-BetParticipant_MarketDescription');
+            let marketDescriptionText = marketDescriptionEl ? marketDescriptionEl.textContent.trim() : '';
 
-            let marketMinutes = "Não especificado";
-            const subHeaderTextEl = item.querySelector('.myb-SettledBetItemHeader_SubHeaderText');
-            if (subHeaderTextEl) {
-                const subHeaderText = subHeaderTextEl.textContent.trim();
-                const matchMinute = subHeaderText.match(/(\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})/);
-                if (matchMinute && matchMinute[1]) {
-                    marketMinutes = matchMinute[1].replace(/\s+/g, '');
-                }
-            } else {
-                const participantSpanEl = item.querySelector('.myb-BetParticipant_ParticipantSpan');
-                if (participantSpanEl) {
-                    const participantSpanText = participantSpanEl.textContent.trim();
-                    const matchMinute = participantSpanText.match(/(\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})/);
+            if (marketDescriptionText) {
+              const unwantedPattern = /Número de Cartões aos \d+ Minutos/gi;
+              marketDescriptionText = marketDescriptionText.replace(unwantedPattern, '').trim();
+              marketDescriptionText = marketDescriptionText.replace(/\s{2,}/g, ' ').trim();
+              marketDescriptionText = marketDescriptionText.split('\n').map(line => line.trim()).filter(line => line).join(' ');
+            }
+
+            let marketMinutes = "Não especificado"; 
+            const marketDescriptionLower = marketDescriptionText.toLowerCase();
+            if (marketDescriptionLower.includes("1º tempo") && marketDescriptionLower.includes("escanteios asiáticos")) {
+                marketMinutes = "40-Int";
+            } else if (marketDescriptionLower.includes("primeiro tempo") && marketDescriptionLower.includes("escanteios asiáticos")) {
+                marketMinutes = "40-Int";
+            } else if (marketDescriptionLower.includes("total de escanteios")) {
+                marketMinutes = "80-Fim";
+            } else if (marketDescriptionLower.includes("escanteios asiáticos") && 
+                       !marketDescriptionLower.includes("1º tempo") && 
+                       !marketDescriptionLower.includes("primeiro tempo")) {
+                marketMinutes = "80-Fim";
+            }
+            
+            if (marketMinutes === "Não especificado") {
+                const subHeaderTextEl = item.querySelector('.myb-SettledBetItemHeader_SubHeaderText');
+                if (subHeaderTextEl) {
+                    const subHeaderText = subHeaderTextEl.textContent.trim();
+                    const matchMinute = subHeaderText.match(/(\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})/);
                     if (matchMinute && matchMinute[1]) {
                         marketMinutes = matchMinute[1].replace(/\s+/g, '');
                     }
+                } else {
+                    const participantSpanEl = item.querySelector('.myb-BetParticipant_ParticipantSpan');
+                    if (participantSpanEl) {
+                        const participantSpanText = participantSpanEl.textContent.trim();
+                        const matchMinute = participantSpanText.match(/(\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2})/);
+                        if (matchMinute && matchMinute[1]) {
+                            marketMinutes = matchMinute[1].replace(/\s+/g, '');
+                        }
+                    }
                 }
+            }
+            
+            if (marketMinutes === "Não especificado" && !marketDescriptionLower.includes("mais de") && !marketDescriptionLower.includes("menos de")) {
+                // console.log(`Item ${i + 1} ignorado: não parece ser de mercado de minutos. Mercado: "${marketDescriptionText}"`);
+                 continue; 
             }
 
             const stakeEl = item.querySelector('.myb-SettledBetItemHeader_Text');
@@ -249,10 +268,7 @@ const BettingTracker = () => {
             const oddText = oddEl ? oddEl.textContent.trim() : '0';
             const oddValue = parseFloat(oddText.replace(',', '.')) || 0;
 
-            let status = 'pending';
-            let profit = 0;
             let returnValue = 0;
-
             if (returnAmountEl) {
                 const returnText = returnAmountEl.textContent.trim();
                 const returnMatch = returnText.match(/[\d,.]+/);
@@ -261,134 +277,103 @@ const BettingTracker = () => {
                 }
             }
 
+            let finalOdd = oddValue;
+            let internalStatus = 'pending';
+            let profit = 0;
+
             if (winLossIndicator) {
                 if (winLossIndicator.classList.contains('myb-WinLossIndicator-won')) {
-                    status = 'won';
-                    profit = returnValue - stakeValue;
+                    internalStatus = 'won'; profit = returnValue - stakeValue;
                 } else if (winLossIndicator.classList.contains('myb-WinLossIndicator-lost')) {
-                    status = 'lost';
-                    profit = -stakeValue;
+                    internalStatus = 'lost'; profit = -stakeValue;
                 } else if (winLossIndicator.classList.contains('myb-WinLossIndicator-void')) {
-                    status = 'void';
-                    profit = 0;
+                    internalStatus = 'void'; profit = 0; finalOdd = 1.0;
                 } else if (winLossIndicator.classList.contains('myb-WinLossIndicator-cashout')) {
-                    status = 'cashed_out';
-                    profit = returnValue - stakeValue;
+                    internalStatus = 'cashed_out'; profit = returnValue - stakeValue;
+                    if (profit > 0 && stakeValue > 0) finalOdd = (profit / stakeValue) + 1;
+                    else if (profit === 0) finalOdd = 1.0;
                 } else {
                     const statusLabelEl = item.querySelector('.myb-SettledBetItem_BetStateLabel');
                     const statusText = statusLabelEl ? statusLabelEl.textContent.trim().toLowerCase() : '';
-                    if (statusText.includes('ganha')) status = 'won';
-                    else if (statusText.includes('perdida')) status = 'lost';
-                    else if (statusText.includes('devolvida')) status = 'void';
-                    else if (statusText.includes('encerrada')) status = 'cashed_out';
-
-                    if (status === 'won' || status === 'cashed_out') {
-                        profit = returnValue - stakeValue;
-                    } else if (status === 'lost') {
-                        profit = -stakeValue;
+                    if (statusText.includes('ganha')) { internalStatus = 'won'; profit = returnValue - stakeValue; }
+                    else if (statusText.includes('perdida')) { internalStatus = 'lost'; profit = -stakeValue; }
+                    else if (statusText.includes('devolvida')) { internalStatus = 'void'; profit = 0; finalOdd = 1.0; }
+                    else if (statusText.includes('encerrada')) { internalStatus = 'cashed_out'; profit = returnValue - stakeValue;
+                        if (profit > 0 && stakeValue > 0) finalOdd = (profit / stakeValue) + 1;
+                        else if (profit === 0) finalOdd = 1.0;
                     }
+                }
+            } else {
+                const statusLabelEl = item.querySelector('.myb-SettledBetItem_BetStateLabel');
+                if (statusLabelEl) {
+                    const statusText = statusLabelEl.textContent.trim().toLowerCase();
+                    if (statusText.includes('ganha')) { internalStatus = 'won'; profit = returnValue - stakeValue; }
+                    else if (statusText.includes('perdida')) { internalStatus = 'lost'; profit = -stakeValue; }
+                    else if (statusText.includes('devolvida')) { internalStatus = 'void'; profit = 0; finalOdd = 1.0; }
+                    else if (statusText.includes('encerrada')) { internalStatus = 'cashed_out'; profit = returnValue - stakeValue;
+                        if (profit > 0 && stakeValue > 0) finalOdd = (profit / stakeValue) + 1;
+                        else if (profit === 0) finalOdd = 1.0;
+                    }
+                } else {
+                    // console.warn(`Item ${i + 1}: Status não pôde ser determinado.`);
                 }
             }
             
-            let championship = "Aguardando busca..."; // Placeholder inicial
-
-            if (homeTeam !== "Time Casa não encontrado" && awayTeam !== "Time Visitante não encontrado" && selectedDateForImport) {
-                const searchQuery = `${homeTeam} vs ${awayTeam} campeonato ${selectedDateForImport} site:sofascore.com`;
-                console.log(`Item ${i + 1}: Query de busca (simulada) para Google Search API: "${searchQuery}"`);
-                
-                // SIMULAÇÃO REFINADA:
-                // Em um cenário real, seu frontend chamaria um endpoint do seu backend aqui.
-                // Seu backend faria a chamada para a Google Search API com a searchQuery.
-                // E então seu backend processaria os resultados para extrair o campeonato, priorizando sofascore.com.
-
-                // Exemplo de como você poderia chamar seu backend (requer implementação do backend):
-                // try {
-                //   const response = await fetch(`/api/search-championship?q=${encodeURIComponent(searchQuery)}`);
-                //   if (response.ok) {
-                //     const data = await response.json();
-                //     championship = data.championship || "Não encontrado via API (Simulado)";
-                //   } else {
-                //     championship = "Erro na API (Simulado)";
-                //   }
-                // } catch (error) {
-                //   console.error("Erro ao chamar API de busca simulada:", error);
-                //   championship = "Falha na conexão API (Simulado)";
-                // }
-
-                // Simulação atual para demonstração do fluxo:
-                if (homeTeam.toLowerCase().includes("flamengo") || awayTeam.toLowerCase().includes("flamengo")) {
-                    championship = "Brasileirão Série A (Sofascore Simulado)";
-                } else if (homeTeam.toLowerCase().includes("real madrid") || awayTeam.toLowerCase().includes("real madrid")) {
-                    championship = "La Liga (Sofascore Simulado)";
-                } else if (homeTeam.toLowerCase().includes("manchester city") || awayTeam.toLowerCase().includes("manchester city")) {
-                    championship = "Premier League (Sofascore Simulado)";
-                } else {
-                    championship = "Campeonato Genérico (Sofascore Simulado)";
-                }
-                console.log(`Item ${i + 1}: Campeonato (simulado) após busca: "${championship}"`);
-            }
+            let championship = "Aguardando busca...";
+            if (homeTeam.toLowerCase().includes("flamengo") || awayTeam.toLowerCase().includes("flamengo")) championship = "Brasileirão Série A (Simulado)";
+            else if (homeTeam.toLowerCase().includes("real madrid") || awayTeam.toLowerCase().includes("real madrid")) championship = "La Liga (Simulado)";
+            else if (homeTeam.toLowerCase().includes("manchester city") || awayTeam.toLowerCase().includes("manchester city")) championship = "Premier League (Simulado)";
+            else championship = "Campeonato Genérico (Simulado)";
 
             const bet = {
                 id: `${selectedDateForImport}-${homeTeam}-${awayTeam}-${marketMinutes}-${selection}-${stakeValue}`.replace(/\s+/g, '-').toLowerCase(),
                 date: selectedDateForImport,
-                championship: championship, // Usar o campeonato encontrado
+                championship: championship,
                 homeTeam: homeTeam,
                 awayTeam: awayTeam,
                 market: marketDescriptionText,
                 marketMinutes: marketMinutes,
                 stake: stakeValue,
-                odd: oddValue,
-                status: status,
-                profit: profit,
+                odd: parseFloat(finalOdd.toFixed(4)),
+                status: internalStatus, 
+                profit: parseFloat(profit.toFixed(2)),
                 selection: selection,
             };
             
-            if (stakeValue > 0 && oddValue > 0 && homeTeam !== "Time Casa não encontrado" && marketMinutes !== "Não especificado") {
-                // Em vez de adicionar diretamente, adicionamos a promessa de processar esta aposta
-                // (neste caso, a "promessa" é o próprio objeto bet, já que a busca simulada é síncrona)
-                // Se a busca fosse realmente async, aqui adicionaríamos a Promise retornada pela busca.
-                parsedBetsPromises.push(Promise.resolve(bet)); // Envolvemos em Promise.resolve para manter a estrutura
-                console.log(`Item ${i + 1}: Aposta válida adicionada à lista de promessas: `, bet);
+            if (stakeValue > 0 && finalOdd > 0 && homeTeam !== "Time Casa não encontrado" && marketMinutes !== "Não especificado") {
+                parsedBetsPromises.push(Promise.resolve(bet));
             } else {
-                console.log(`Item ${i + 1}: Aposta inválida ou incompleta, não adicionada. Stake: ${stakeValue}, Odd: ${oddValue}, Home: ${homeTeam}, MarketMinutes: ${marketMinutes}`);
+                // console.log(`Item ${i + 1}: Aposta inválida ou incompleta, não adicionada.`);
             }
-        } // Fim do loop for
+        } 
 
-        // Esperar todas as "promessas" (buscas de campeonato) serem resolvidas
         const parsedBets = await Promise.all(parsedBetsPromises);
-
         if (parsedBets.length === 0) {
-            console.log("Nenhuma aposta válida de mercado de minutos foi encontrada no HTML fornecido ou processada.");
-            alert("Nenhuma aposta válida de mercado de minutos foi encontrada no arquivo HTML.");
-        } else {
-            console.log(`Total de apostas de mercado de minutos processadas: ${parsedBets.length}`);
+            console.log("Nenhuma aposta válida foi encontrada no HTML.");
+            // alert("Nenhuma aposta válida foi encontrada no arquivo HTML."); // Feedback já é dado via setImportFeedback
         }
         return parsedBets;
 
     } catch (error) {
         console.error("Erro ao processar o HTML da Bet365:", error);
-        alert("Erro ao processar o HTML. Verifique o console para detalhes.");
+        // alert("Erro ao processar o HTML. Verifique o console."); // Feedback já é dado via setImportFeedback
         return [];
     }
-};
+  };
 
-  // Envolver clearImportFeedback em useCallback
   const clearImportFeedback = useCallback(() => {
     setImportFeedback({ type: '', message: '' });
-  }, [setImportFeedback]); // setImportFeedback é estável, mas é bom listá-lo como boa prática
+  }, [setImportFeedback]); 
 
   const handleDeleteBetsByDate = useCallback((dateToDelete) => {
     if (!dateToDelete) {
       setImportFeedback({ type: 'error', message: 'Nenhuma data selecionada para exclusão.' });
       return;
     }
-
-    const confirmDelete = window.confirm(`Tem certeza que deseja excluir TODAS as apostas do dia ${new Date(dateToDelete + 'T00:00:00').toLocaleDateString('pt-BR')}? Esta ação não pode ser desfeita.`);
-
+    const confirmDelete = window.confirm(`Tem certeza que deseja excluir TODAS as apostas do dia ${new Date(dateToDelete + 'T00:00:00').toLocaleDateString('pt-BR')}?`);
     if (confirmDelete) {
       const actualDeletedCount = bets.filter(bet => bet.date === dateToDelete).length;
       setBets(prevBets => prevBets.filter(bet => bet.date !== dateToDelete));
-
       if (actualDeletedCount > 0) {
         setImportFeedback({ type: 'success', message: `${actualDeletedCount} aposta(s) do dia ${new Date(dateToDelete + 'T00:00:00').toLocaleDateString('pt-BR')} foram excluídas.` });
       } else {
@@ -400,21 +385,16 @@ const BettingTracker = () => {
   }, [bets, setBets, setImportFeedback]);
 
   const handleFileUpload = async (file, selectedDateForImport) => {
-    clearImportFeedback(); // Agora clearImportFeedback tem referência estável
+    clearImportFeedback();
     if (!selectedDateForImport) {
-      // alert("Por favor, selecione uma data para as apostas.");
       setImportFeedback({ type: 'error', message: 'Por favor, selecione uma data para as apostas.' });
       return;
     }
     if (!file || file.type !== "text/html") {
-      // alert("Por favor, selecione um arquivo HTML válido.");
       setImportFeedback({ type: 'error', message: 'Por favor, selecione um arquivo HTML válido.' });
       return;
     }
-
     setIsImporting(true);
-    // const reader = new FileReader(); // Movido para dentro de uma nova Promise para melhor controle
-
     try {
       const htmlString = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -422,35 +402,28 @@ const BettingTracker = () => {
         reader.onerror = (error) => reject(error);
         reader.readAsText(file);
       });
-
       const parsedBets = await parseBet365HTML(htmlString, selectedDateForImport);
-      
       if (parsedBets && parsedBets.length > 0) {
         setBets(prevBets => {
           const newBetsToAdd = parsedBets.filter(newBet => 
             !prevBets.some(existingBet => existingBet.id === newBet.id)
           );
           if (newBetsToAdd.length > 0) {
-            // alert(`${newBetsToAdd.length} novas apostas importadas com sucesso para ${selectedDateForImport}!`);
             setImportFeedback({ type: 'success', message: `${newBetsToAdd.length} novas apostas importadas com sucesso para ${selectedDateForImport}!` });
             return [...newBetsToAdd, ...prevBets];
           }
-          // alert("Nenhuma nova aposta encontrada no arquivo ou todas as apostas do arquivo já existem para esta data e evento.");
-          setImportFeedback({ type: 'info', message: 'Nenhuma nova aposta encontrada no arquivo ou todas as apostas do arquivo já existem.' });
+          setImportFeedback({ type: 'info', message: 'Nenhuma nova aposta encontrada ou todas já existem.' });
           return prevBets;
         });
       } else {
-        // Se parseBet365HTML já deu um alert sobre "Nenhuma aposta válida", 
-        // podemos não precisar de outro feedback aqui, ou podemos centralizar.
-        // Por ora, se parsedBets for vazio e não houve erro, é provável que parseBet365HTML já tenha alertado.
-        // No entanto, para o novo sistema de feedback, vamos garantir uma mensagem.
-        if (!importFeedback.message) { // Só define se nenhuma outra mensagem (de erro no parse) foi definida
-            setImportFeedback({ type: 'info', message: 'Nenhuma aposta válida de mercado de minutos encontrada no arquivo.' });
+        // Se parseBet365HTML já deu feedback (ex: Nenhuma aposta encontrada), respeitamos isso.
+        // Caso contrário, damos um feedback genérico aqui.
+        if (!importFeedback.message && parsedBets.length === 0) { // Verifica se parsedBets está vazio e nenhum feedback foi setado
+            setImportFeedback({ type: 'info', message: 'Nenhuma aposta válida para importação foi encontrada no arquivo.' });
         }
       }
     } catch (error) {
       console.error("Erro em handleFileUpload:", error);
-      // alert("Ocorreu um erro ao processar o arquivo. Verifique o console para mais detalhes.");
       setImportFeedback({ type: 'error', message: `Erro ao processar o arquivo: ${error.message || 'Erro desconhecido.'}` });
     }
     finally {
@@ -458,86 +431,108 @@ const BettingTracker = () => {
     }
   };
 
+  let profitIcon;
+  let profitIconColor = 'text-gray-400';
+  if (stats.totalProfit > 0) {
+    profitIcon = <TrendingUp />; profitIconColor = 'text-green-500';
+  } else if (stats.totalProfit < 0) {
+    profitIcon = <TrendingDown />; profitIconColor = 'text-red-500';
+  } else { 
+    profitIcon = <TrendingUp />;
+  }
+
+  const roiTooltipText = "ROI (Retorno Sobre o Investimento) mede o lucro ou prejuízo de um investimento em relação ao custo.";
+  const dashboardLinkPath = "/";
+  const reportsLinkPath = "/reports";
+
   return (
-    <div className="min-h-screen bg-green-700 text-gray-100">
-      {/* Header APRIMORADO com Logo, Frase e Stats Cards */}
-      <div className="bg-green-300 shadow-md border-b border-green-200 w-full">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-x-6">
-            <div className="flex-shrink-0">
-              <img src="/logo.png" alt="Corner System Logo" className="h-36" />
+    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col">
+      <div className="bg-gray-200 shadow-md w-full border-b border-gray-300 py-4">
+        <div className="max-w-full mx-auto px-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-x-6 gap-y-4">
+            <div className="flex-shrink-0 order-1 sm:order-1">
+              <img src="/logo.png" alt="Corner System Logo" className="h-28 sm:h-32" /> 
             </div>
-            <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatsCard title="Lucro Total" value={`R$ ${stats.totalProfit.toFixed(2).replace('.', ',')}`} icon={<TrendingUp size={22} />} color="text-yellow-400" textSize="text-sm" valueSize="text-xl" />
-              <StatsCard title="Taxa de Acerto" value={`${stats.winRate.toFixed(1).replace('.', ',')}%`} icon={<BarChart3 size={22} />} color="text-yellow-400" textSize="text-sm" valueSize="text-xl" />
-              <StatsCard title="Total de Apostas" value={stats.totalBets} icon={<Plus size={22} />} color="text-yellow-400" textSize="text-sm" valueSize="text-xl" />
-              <StatsCard title="Odd Média" value={stats.averageOdd.toFixed(2).replace('.', ',')} icon={<Target size={22} />} color="text-yellow-400" textSize="text-sm" valueSize="text-xl" />
+            <div className="flex-grow text-center order-3 sm:order-2 my-2 sm:my-0"> 
+              <p className="text-2xl sm:text-3xl font-sans text-gray-700 font-semibold">
+                Em busca do <span className="text-3xl sm:text-4xl font-bold text-green-700">Green</span>
+              </p>
+            </div>
+            <div className="flex-shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2 w-full sm:w-auto order-2 sm:order-3">
+              <StatsCard title="Lucro Total" value={`R$ ${stats.totalProfit.toFixed(2).replace('.', ',')}`} icon={profitIcon} bgColor="bg-gray-700" titleColor="text-gray-300" valueColor="text-white" iconColor={profitIconColor} valueSize="text-lg" textSize="text-base"/>
+              <StatsCard title="Taxa de Acerto" value={`${stats.winRate.toFixed(1).replace('.', ',')}%`} icon={<BarChart3 />} bgColor="bg-gray-700" titleColor="text-gray-300" valueColor="text-white" iconColor="text-blue-500" valueSize="text-lg" textSize="text-base"/>
+              <StatsCard title="ROI" value={`${stats.roi.toFixed(1).replace('.', ',')}%`} icon={<HelpCircle />} bgColor="bg-gray-700" titleColor="text-gray-300" valueColor="text-white" iconColor="text-blue-400" tooltipText={roiTooltipText} valueSize="text-lg" textSize="text-base" iconPosition="top-right"/>
+              <div className="flex flex-col space-y-1.5 h-full">
+                <StatsCard title="Total de Apostas" value={`${stats.totalBets}`} bgColor="bg-gray-700" titleColor="text-gray-300" valueColor="text-white" textSize="text-xs" valueSize="text-xs"/>
+                <StatsCard title="Odd Média" value={`${stats.averageOdd.toFixed(2).replace('.', ',')}`} bgColor="bg-gray-700" titleColor="text-gray-300" valueColor="text-white" textSize="text-xs" valueSize="text-xs"/>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="bg-green-400 border-b border-green-300">
-        <div className="max-w-7xl mx-auto px-4">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`py-3 px-2 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'border-yellow-500 text-yellow-600'
-                  : 'border-transparent text-green-700 hover:text-yellow-500'
-              }`}
+      <div className="bg-gray-700 border-b border-gray-600">
+        <div className="max-w-full mx-auto px-4">
+          <nav className="flex space-x-6 sm:space-x-8 justify-center sm:justify-start">
+            <NavLink
+              to={dashboardLinkPath}
+              end
+              className={({ isActive }) =>
+                `py-2 sm:py-3 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  isActive
+                    ? 'border-red-500 text-red-400'
+                    : 'border-transparent text-gray-300 hover:text-red-400'
+                }`
+              }
             >
               Dashboard
-            </button>
-            <button
-              onClick={() => setActiveTab('reports')}
-              className={`py-3 px-2 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'reports'
-                  ? 'border-yellow-500 text-yellow-600'
-                  : 'border-transparent text-green-700 hover:text-yellow-500'
-              }`}
+            </NavLink>
+            <NavLink
+              to={reportsLinkPath}
+              className={({ isActive }) =>
+                `py-2 sm:py-3 px-2 border-b-2 font-medium text-sm transition-colors ${
+                  isActive
+                    ? 'border-red-500 text-red-400'
+                    : 'border-transparent text-gray-300 hover:text-red-400'
+                }`
+              }
             >
               Relatórios
-            </button>
+            </NavLink>
           </nav>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {activeTab === 'dashboard' && (
-          <Dashboard 
-            stats={stats}
-            todayBetsCount={todayBetsCount}
-            onShowAddForm={handleOpenAddForm}
-            bets={bets}
-            onFileUpload={handleFileUpload}
-            onEditBet={handleEditBet}
-            onDeleteBet={handleDeleteBet}
-            isImporting={isImporting}
-            importFeedback={importFeedback}
-            clearImportFeedback={clearImportFeedback}
-            onDeleteBetsByDate={handleDeleteBetsByDate}
+      <main className="flex-grow max-w-full mx-auto px-2 sm:px-4 py-4 sm:py-6 w-full">
+        <Routes>
+          <Route 
+            index
+            element={
+              <Dashboard 
+                stats={stats}
+                todayBetsCount={todayBetsCount}
+                onShowAddForm={handleOpenAddForm}
+                bets={bets}
+                onFileUpload={handleFileUpload}
+                onEditBet={handleEditBet}
+                onDeleteBet={handleDeleteBet}
+                isImporting={isImporting}
+                importFeedback={importFeedback}
+                clearImportFeedback={clearImportFeedback}
+                onDeleteBetsByDate={handleDeleteBetsByDate}
+              />
+            } 
           />
-        )}
-        {activeTab === 'reports' && (
-          <Reports 
-            bets={bets} 
-            timeIntervals={timeIntervals} 
-            championships={uniqueChampionships} 
+          <Route 
+            path={reportsLinkPath}
+            element={<ReportsPage allBetsFromTracker={bets} />}
           />
-        )}
-      </div>
+        </Routes>
+      </main>
 
-      {/* Add Form Modal */}
       <AddBetForm 
         show={showAddForm}
-        onClose={() => {
-          setShowAddForm(false);
-          setEditingBet(null);
-        }}
+        onClose={() => { setShowAddForm(false); setEditingBet(null); }}
         formData={formData}
         handleInputChange={handleInputChange}
         handleSubmit={handleSubmit}
@@ -547,37 +542,20 @@ const BettingTracker = () => {
         editingBet={editingBet}
       />
 
-      {/* Footer */}
-      <footer className="bg-blue-200 border-t border-blue-300 py-3 text-blue-800 text-xs mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
-          {/* Informações do Desenvolvedor e Contatos à Esquerda */}
-          <div className="text-left space-y-1 mb-2 md:mb-0">
-            <p>Developed by: <span className="font-bold">Bruno Costa</span></p>
-            <div className="flex items-center space-x-1 md:space-x-2 flex-wrap">
-              <a href="mailto:costa_developer@gmail.com" className="flex items-center hover:text-yellow-500 whitespace-nowrap">
-                <Mail size={14} className="mr-1 flex-shrink-0" /> costa_developer@gmail.com
-              </a>
-              <span className="text-blue-400 mx-1">/</span>
-              <a href="#!" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-yellow-500 whitespace-nowrap">
-                <Twitter size={14} className="mr-1 flex-shrink-0" /> @Costa_developer
-              </a>
+      <footer className="bg-gray-800 border-t border-gray-700 py-4 text-gray-400 text-xs mt-auto">
+        <div className="max-w-full mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-y-2">
+          <div className="text-center md:text-left space-y-1">
+            <p>Developed by: <span className="font-bold text-gray-200">Bruno Costa</span></p>
+            <div className="flex items-center justify-center md:justify-start space-x-2 flex-wrap">
+              <a href="mailto:costa_developer@gmail.com" className="flex items-center hover:text-red-400 whitespace-nowrap"><Mail size={14} className="mr-1 flex-shrink-0" /> costa_developer@gmail.com</a>
+              <span className="text-gray-600 mx-1 hidden sm:inline">/</span>
+              <a href="#!" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-red-400 whitespace-nowrap"><Twitter size={14} className="mr-1 flex-shrink-0" /> @Costa_developer</a>
             </div>
-            <div className="flex items-center space-x-1 md:space-x-2 flex-wrap mt-0.5">
-              <a href="#!" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-yellow-500 whitespace-nowrap">
-                <Instagram size={14} className="mr-1 flex-shrink-0" /> @Costa_developoer
-              </a>
-              <span className="text-blue-400 mx-1">/</span>
-              <a href="#!" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-yellow-500 whitespace-nowrap">
-                <Linkedin size={14} className="mr-1 flex-shrink-0" /> @Costa_developoer
-              </a>
+            <div className="flex items-center justify-center md:justify-start space-x-2 flex-wrap mt-0.5">
+              <a href="#!" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-red-400 whitespace-nowrap"><Instagram size={14} className="mr-1 flex-shrink-0" /> @Costa_developoer</a>
+              <span className="text-gray-600 mx-1 hidden sm:inline">/</span>
+              <a href="#!" target="_blank" rel="noopener noreferrer" className="flex items-center hover:text-red-400 whitespace-nowrap"><Linkedin size={14} className="mr-1 flex-shrink-0" /> @Costa_developoer</a>
             </div>
-          </div>
-
-          {/* Frase Centralizada */}
-          <div className="text-center">
-            <p className="text-xl italic font-serif text-green-800">
-              Em busca do <span className="text-2xl">Green</span>
-            </p>
           </div>
         </div>
       </footer>
@@ -585,4 +563,4 @@ const BettingTracker = () => {
   );
 };
 
-export default BettingTracker; 
+export default BettingTracker;
